@@ -27,6 +27,7 @@ export async function getPublicConfig(rootDir = process.cwd()) {
     notionConfigured: Boolean(process.env.NOTION_TOKEN && selectedTargetId),
     notionHostPersonId: process.env.NOTION_HOST_PERSON_ID || "",
     model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+    selectedTargetId,
     notionDatabaseId: selectedTargetId ? maskValue(selectedTargetId) : "",
     notionTargetLabel: selectedTarget?.label || "",
     notionTargets: targetStore.targets.map((target) => ({
@@ -89,7 +90,7 @@ export async function testNotionSettings() {
 
   const notion = createNotionClient();
   const target = await resolveMeetingTarget(notion, process.env.NOTION_MEETING_DATABASE_ID);
-  const title = getPlainTitle(target.dataSource.title || target.database?.title) || "未命名會議資料庫";
+  const title = getPlainTitle(target.dataSource.title || target.database?.title) || DEFAULT_NOTION_TARGET_LABEL;
 
   return {
     ok: true,
@@ -105,7 +106,6 @@ export function extractNotionDatabaseId(value = "") {
   const compact = text.replace(/-/g, "");
   const match = compact.match(/[0-9a-fA-F]{32}/);
   if (!match) return text;
-
   const id = match[0].toLowerCase();
   return `${id.slice(0, 8)}-${id.slice(8, 12)}-${id.slice(12, 16)}-${id.slice(16, 20)}-${id.slice(20)}`;
 }
@@ -158,6 +158,7 @@ function normalizeNotionTargetStore(store = {}) {
   for (const target of rawTargets) {
     const id = extractNotionDatabaseId(clean(target?.id || target?.databaseId || ""));
     if (!id || seen.has(id)) continue;
+
     seen.add(id);
     targets.push({
       id,
@@ -239,4 +240,3 @@ function maskValue(value) {
   if (text.length <= 8) return "已設定";
   return `${text.slice(0, 4)}...${text.slice(-4)}`;
 }
-

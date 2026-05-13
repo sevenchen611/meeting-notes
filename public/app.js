@@ -38,6 +38,7 @@ const participantSuggestions = document.querySelector("#participantSuggestions")
 const addParticipantButton = document.querySelector("#addParticipantButton");
 const participantChips = document.querySelector("#participantChips");
 const settingsForm = document.querySelector("#settingsForm");
+const notionSettingsForm = document.querySelector("#notionSettingsForm");
 const settingsMessage = document.querySelector("#settingsMessage");
 const saveSettingsButton = document.querySelector("#saveSettingsButton");
 const testGeminiButton = document.querySelector("#testGeminiButton");
@@ -70,6 +71,18 @@ if (toggleMarkdownEditButton) {
 let selectedParticipants = [];
 const API_BASE = window.location.protocol === "file:" ? "http://localhost:5178" : "";
 const PARTICIPANT_HISTORY_KEY = "meeting-notes-participant-history";
+const SETTINGS_CACHE_KEY = "meeting-notes-settings-v2";
+const DEFAULT_NOTION_TARGETS = [
+  {
+    id: "35951c68-6dac-80bf-b5b5-c34e379a865a",
+    label: "好主意好會議"
+  },
+  {
+    id: "35d51c68-6dac-80a4-9fd8-ed5372c520fe",
+    label: "讀書會議"
+  }
+];
+const FALLBACK_MODEL = "gemini-2.5-flash";
 const DEFAULT_PARTICIPANT_HISTORY = [
   "與會者",
   "與會者是 Seven 跟昱晴 Maggie。",
@@ -184,31 +197,45 @@ participantInput.addEventListener("keydown", (event) => {
   }
 });
 
-settingsForm.addEventListener("submit", async (event) => {
+async function handleSettingsSubmit(event) {
   event.preventDefault();
   setSettingsBusy(true, "儲存設定中...");
+  const apiSettingsValues = settingsForm ? Object.fromEntries(new FormData(settingsForm)) : {};
+  const notionSettingsValues = notionSettingsForm ? Object.fromEntries(new FormData(notionSettingsForm)) : {};
+  const formValues = {
+    ...apiSettingsValues,
+    ...notionSettingsValues
+  };
 
   try {
     const response = await fetch(apiUrl("/api/settings"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(Object.fromEntries(new FormData(settingsForm)))
+      body: JSON.stringify(formValues)
     });
     const payload = await response.json();
     if (!response.ok) {
       throw new Error(payload.error || "儲存設定失敗。")
     }
 
-    currentConfig = payload;
-    renderStatus(payload);
+    currentConfig = normalizePublicConfig(payload, { fromApi: true });
+    renderStatus(currentConfig);
+    persistSettingsToLocal(currentConfig);
     clearSecretFields();
     showSettingsMessage("設定已儲存。");
   } catch (error) {
-    showSettingsMessage(error.message || "儲存失敗，請稍後再試。", true);
+    const fallbackConfig = buildSettingsFromForm(formValues, currentConfig);
+    currentConfig = normalizePublicConfig(fallbackConfig, { fromApi: false });
+    persistSettingsToLocal(currentConfig);
+    renderStatus(currentConfig);
+    showSettingsMessage(error.message || "儲存失敗，已改為暫存本機設定。", true);
   } finally {
     setSettingsBusy(false);
   }
-});
+}
+
+settingsForm?.addEventListener("submit", handleSettingsSubmit);
+notionSettingsForm?.addEventListener("submit", handleSettingsSubmit);
 
 testGeminiButton.addEventListener("click", () => testSetting("/api/settings/test-gemini", "Gemini 測試成功"));
 testNotionButton.addEventListener("click", () => testSetting("/api/settings/test-notion", "Notion 測試成功"));
@@ -597,12 +624,161 @@ async function loadConfig() {
   try {
     const response = await fetch(apiUrl("/api/config"));
     const payload = await response.json();
-    currentConfig = payload;
-    renderStatus(payload);
+    if (!response.ok) {
+      throw new Error(payload.error || "擷取設定失敗。");
+    }
+    currentConfig = normalizePublicConfig(payload, { fromApi: true });
+    persistSettingsToLocal(currentConfig);
+    renderStatus(currentConfig);
+    statusRow.append(pill("狀態：已同步雲端設定", "ok"));
   } catch {
-    statusRow.innerHTML = "";
-    statusRow.append(pill("狀態：擷取失敗", "warn"));
+    const fallbackConfig = getCachedSettings();
+    currentConfig = normalizePublicConfig(fallbackConfig, { fromApi: false });
+    renderStatus(currentConfig);
+    statusRow.append(pill("狀態：擷取失敗，使用本機設定", "warn"));
   }
+}
+
+function normalizePublicConfig(raw = {}, options = {}) {
+  const serverTargets = Array.isArray(raw?.notionTargets) ? raw.notionTargets : null;
+  const selectedTargetFromTargets = serverTargets?.find((target) => target?.selected)?.id;
+  const selectedTargetIdHint = raw.selectedTargetId || selectedTargetFromTargets || "";
+  const normalizedTargets = normalizeNotionTargets(
+    serverTargets,
+    selectedTargetIdHint
+  );
+  const selectedTargetId = resolveSelectedTargetId(normalizedTargets, selectedTargetIdHint || "");
+  const selectedTarget = normalizedTargets.find((target) => target.id === selectedTargetId) || null;
+
+  const notionConfigured = Boolean(
+    options.fromApi
+      ? raw.notionConfigured
+      : raw.notionConfigured || Boolean(raw.notionToken && selectedTargetId)
+  );
+
+  return {
+    geminiConfigured: Boolean(raw.geminiConfigured || raw.geminiApiKey),
+    notionConfigured,
+    notionHostPersonId: String(raw.notionHostPersonId || ""),
+    model: String(raw.model || FALLBACK_MODEL),
+    notionDatabaseId: selectedTargetId,
+    notionTargetLabel: selectedTarget?.label || "",
+    notionTargets: normalizedTargets,
+    selectedTargetId,
+    notionToken: String(raw.notionToken || "")
+  };
+}
+
+function getCachedSettings() {
+  try {
+    const raw = window.localStorage.getItem(SETTINGS_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistSettingsToLocal(config = {}) {
+  try {
+    const normalized = normalizePublicConfig(config, { fromApi: true });
+    const payload = {
+      geminiModel: normalized.model,
+      geminiConfigured: normalized.geminiConfigured,
+      notionConfigured: normalized.notionConfigured,
+      notionHostPersonId: normalized.notionHostPersonId,
+      notionTargets: normalized.notionTargets,
+      selectedTargetId: normalized.selectedTargetId,
+      updatedAt: new Date().toISOString()
+    };
+    window.localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(payload));
+  } catch {
+    // Intentionally ignore cache write errors.
+  }
+}
+
+function buildSettingsFromForm(formValues = {}, baseConfig = {}) {
+  const fallbackTargets = normalizeNotionTargets(baseConfig?.notionTargets || [], baseConfig?.selectedTargetId);
+  const inputTargetId = extractNotionDatabaseId(formValues.notionDatabaseIdOrUrl || "");
+  const selectedFromForm = String(formValues.notionTargetId || "").trim();
+  const inputLabel = String(formValues.notionTargetLabel || "").trim();
+  const hostPersonId = String(formValues.notionHostPersonId || "").trim();
+  const model = String(formValues.geminiModel || "").trim() || FALLBACK_MODEL;
+  let selectedTargetId = inputTargetId || selectedFromForm || baseConfig.selectedTargetId || "";
+
+  const targets = fallbackTargets.map((target) => ({ ...target }));
+  if (inputTargetId) {
+    const existing = targets.find((target) => target.id === inputTargetId);
+    if (existing) {
+      existing.label = inputLabel || existing.label;
+    } else {
+      targets.push({
+        id: inputTargetId,
+        label: inputLabel || `未命名會議記錄`
+      });
+    }
+  } else if (selectedFromForm && inputLabel) {
+    const selectedTarget = targets.find((target) => target.id === selectedFromForm);
+    if (selectedTarget) {
+      selectedTarget.label = inputLabel;
+    }
+  }
+
+  return {
+    notionTargets: targets,
+    selectedTargetId,
+    notionHostPersonId: hostPersonId,
+    notionToken: String(formValues.notionToken || ""),
+    geminiModel: model,
+    geminiConfigured: Boolean(formValues.geminiApiKey || baseConfig.geminiConfigured),
+    notionConfigured: Boolean(formValues.notionToken || baseConfig.notionConfigured) && Boolean(selectedTargetId)
+  };
+}
+
+function normalizeNotionTargets(rawTargets = [], selectedTargetId = "") {
+  const targets = [];
+  const seenIds = new Set();
+  const merged = [
+    ...DEFAULT_NOTION_TARGETS,
+    ...rawTargets
+  ];
+
+  for (const target of merged) {
+    const id = extractNotionDatabaseId(target.id || "");
+    if (!id || seenIds.has(id)) continue;
+    seenIds.add(id);
+    targets.push({
+      id,
+      label: String(target.label || `未命名會議記錄`),
+      selected: selectedTargetId ? id === selectedTargetId : false,
+      maskedId: maskId(id)
+    });
+  }
+
+  return targets;
+}
+
+function resolveSelectedTargetId(targets = [], selectedTargetId = "") {
+  const normalizedSelectedId = extractNotionDatabaseId(selectedTargetId);
+  if (normalizedSelectedId && targets.some((target) => target.id === normalizedSelectedId)) {
+    return normalizedSelectedId;
+  }
+  return targets[0]?.id || "";
+}
+
+function extractNotionDatabaseId(value = "") {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const compact = text.replace(/-/g, "");
+  const match = compact.match(/[0-9a-fA-F]{32}/);
+  if (!match) return text;
+  const id = match[0].toLowerCase();
+  return `${id.slice(0, 8)}-${id.slice(8, 12)}-${id.slice(12, 16)}-${id.slice(16, 20)}-${id.slice(20)}`;
+}
+
+function maskId(value = "") {
+  const text = String(value || "");
+  if (!text || text.length <= 8) return "";
+  return `${text.slice(0, 4)}...${text.slice(-4)}`;
 }
 
 async function loadPromptTemplates() {
@@ -766,7 +942,7 @@ async function testSetting(url, successMessage) {
 
 function renderStatus(config) {
   statusRow.innerHTML = "";
-  geminiModel.value = config.model || "gemini-2.5-flash";
+  geminiModel.value = config.model || FALLBACK_MODEL;
   renderNotionTargetControls(config);
   const targetLabel = config.notionTargetLabel ? `：${config.notionTargetLabel}` : "";
   const notionHostLabel = config.notionHostPersonId ? "已設定" : "未設定";
@@ -778,7 +954,7 @@ function renderStatus(config) {
     pill(config.geminiConfigured ? "Gemini：已設定" : "Gemini：未設定", config.geminiConfigured ? "ok" : "warn"),
     pill(config.notionConfigured ? `Notion${targetLabel}` : "Notion：未設定", config.notionConfigured ? "ok" : "warn"),
     pill(`主持人 ID：${notionHostLabel}`, notionHostLabel === "已設定" ? "ok" : "warn"),
-    pill(`模型：${config.model || "gemini-2.5-flash"}`, "pending")
+    pill(`模型：${config.model || FALLBACK_MODEL}`, "pending")
   );
 }
 
