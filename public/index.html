@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>會議紀錄</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="workspace">
+        <div class="intro">
+          <p class="eyebrow">會議紀錄工具</p>
+          <h1>會議紀錄</h1>
+          <p class="intro-copy">
+            上傳會議錄音後，AI 會先產出會議紀錄供你確認、修正，再決定是否寫入 Notion。
+          </p>
+          <div class="status-row" id="statusRow">
+            <span class="pill pending">狀態：尚未同步</span>
+          </div>
+        </div>
+
+        <form class="panel upload-panel" id="meetingForm">
+          <label class="field file-field">
+            <span>上傳音檔</span>
+            <input
+              id="audioFile"
+              name="audio"
+              type="file"
+              accept=".mp3,.m4a,.wav,.aac,.flac,.ogg,.webm,audio/*"
+              required
+            />
+            <small class="field-hint">建議使用 mp3 / m4a / wav / aac / flac / ogg / webm。</small>
+          </label>
+
+          <label class="checkbox-field" for="attachAudioToNotion">
+            <input id="attachAudioToNotion" name="attachAudioToNotion" type="checkbox" value="true" />
+            <span>寫入 Notion 時一併附上錄音檔</span>
+          </label>
+
+          <div class="form-grid date-host-grid">
+            <label class="field date-inline">
+              <span>會議日期</span>
+              <input id="meetingDate" name="meetingDate" type="date" />
+            </label>
+
+            <label class="field">
+              <span>會議主持人</span>
+              <select id="meetingHost" name="meetingHost">
+                <option value="">未指定</option>
+              </select>
+            </label>
+          </div>
+
+          <label class="field speaker-picker-field participant-large">
+            <span>與會人員（建議依發言順序輸入）</span>
+            <input id="participants" name="participants" type="hidden" />
+            <div class="participant-picker">
+              <div class="participant-select-row">
+                <select id="participantPresetSelect">
+                  <option value="">從歷史紀錄帶入</option>
+                </select>
+              </div>
+
+              <div class="participant-entry-row">
+                <input
+                  id="participantInput"
+                  type="text"
+                  list="participantSuggestions"
+                  placeholder="例：Seven（聖文，男）或 Maggie（昱晴，女）"
+                />
+                <datalist id="participantSuggestions"></datalist>
+                <button class="secondary inline-action" type="button" id="addParticipantButton">新增</button>
+              </div>
+
+              <div id="participantChips" class="participant-chips" aria-live="polite"></div>
+            </div>
+            <small class="field-hint">
+              建議先加入會議主持人與主要發言順序的主講人。可先從下拉選單選擇常用與會人員；沒有的名稱可直接輸入後按「新增」。
+            </small>
+          </label>
+
+          <label class="field">
+            <span>會議背景</span>
+            <textarea
+              id="context"
+              name="context"
+              rows="4"
+              placeholder="請填寫會議背景（例如：專案更新會議 / 周會 / 決策事項）"
+            ></textarea>
+          </label>
+
+          <label class="field">
+            <span>Prompt 版本</span>
+            <select id="promptVersionId" name="promptVersionId">
+              <option value="default">系統預設 Prompt</option>
+            </select>
+            <p class="field-hint">選擇後送交分析的格式與重點規則。</p>
+          </label>
+
+          <div class="actions">
+            <button class="primary" type="submit" id="analyzeButton">開始分析</button>
+            <button class="secondary" type="button" id="uploadNotionButton" hidden>上傳 Notion</button>
+            <span id="progressText" class="progress-text"></span>
+          </div>
+        </form>
+      </section>
+
+      <section class="settings-wrap">
+        <div class="result-toolbar compact">
+          <div>
+            <p class="eyebrow">進階設定</p>
+            <h2>Prompt 管理 / API 設定</h2>
+          </div>
+        </div>
+
+        <form class="panel settings-panel is-collapsed" id="promptForm">
+          <div class="step-row collapsible-head">
+            <div class="step-number">1</div>
+            <div>
+              <h3>Prompt 版本</h3>
+              <p class="meta">可新增、編輯不同版本的 Prompt，輸入後產生對應會議記錄風格。</p>
+            </div>
+            <button
+              class="secondary collapse-toggle"
+              type="button"
+              data-collapse-toggle="promptSettingsContent"
+              aria-controls="promptSettingsContent"
+              aria-expanded="false"
+            >
+              展開
+            </button>
+          </div>
+
+          <div class="collapsible-content" id="promptSettingsContent" hidden>
+            <label class="field">
+              <span>Prompt 版本</span>
+              <select id="promptVersionSelect" name="promptVersionSelect">
+                <option value="default">系統預設 Prompt</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>版本名稱</span>
+              <input id="promptVersionName" name="promptVersionName" type="text" placeholder="例如：基礎版 v1" />
+            </label>
+
+            <label class="field">
+              <span>內容</span>
+              <textarea
+                id="promptTemplate"
+                name="promptTemplate"
+                rows="16"
+                placeholder="可編輯此處的可見段落；固定規則請用「隱藏 Prompt」管理"
+              ></textarea>
+              <p class="meta">只有可見段落會儲存於此欄位，固定規則無法直接修改。</p>
+            </label>
+
+            <div class="actions">
+              <button class="secondary" type="button" id="updatePromptButton">更新 Prompt</button>
+              <button class="secondary" type="button" id="createPromptButton">新增 Prompt</button>
+              <span id="promptMessage" class="progress-text"></span>
+            </div>
+          </div>
+        </form>
+
+        <form class="panel settings-panel is-collapsed" id="settingsForm">
+          <div class="step-row collapsible-head">
+            <div class="step-number">2</div>
+            <div>
+              <h3>API 設定</h3>
+              <p class="meta">設定 Gemini API Key 與 Notion Integration，平常可先收起。</p>
+            </div>
+            <button
+              class="secondary collapse-toggle"
+              type="button"
+              data-collapse-toggle="apiSettingsContent"
+              aria-controls="apiSettingsContent"
+              aria-expanded="false"
+            >
+              展開
+            </button>
+          </div>
+
+          <div class="collapsible-content" id="apiSettingsContent" hidden>
+            <div class="settings-subpanel">
+              <div class="step-row nested-step">
+                <div class="step-number">2</div>
+                <div>
+                  <h3>Gemini API Key</h3>
+                  <p class="meta">請先在 Google AI Studio 取得 API key。</p>
+                  <a
+                    class="link-button"
+                    href="https://aistudio.google.com/app/apikey"
+                    target="_blank"
+                    rel="noreferrer"
+                    >開啟 Google AI Studio</a
+                  >
+                </div>
+                <button
+                  class="secondary collapse-toggle"
+                  type="button"
+                  data-collapse-toggle="geminiApiSettingsContent"
+                  aria-controls="geminiApiSettingsContent"
+                  aria-expanded="false"
+                >
+                  展開
+                </button>
+              </div>
+
+              <div class="collapsible-content nested-subsection" id="geminiApiSettingsContent" hidden>
+                <label class="field">
+                  <span>Gemini API Key</span>
+                  <input
+                    id="geminiApiKey"
+                    name="geminiApiKey"
+                    type="password"
+                    autocomplete="off"
+                    placeholder="請填入 Google AI Studio API key"
+                  />
+                </label>
+
+                <label class="field">
+                  <span>Gemini Model</span>
+                  <input id="geminiModel" name="geminiModel" type="text" value="gemini-2.5-flash" />
+                </label>
+              </div>
+            </div>
+
+            <div class="settings-subpanel">
+              <div class="step-row nested-step">
+                <div class="step-number">3</div>
+                <div>
+                  <h3>Notion Integration</h3>
+                  <p class="meta">選擇要寫入的會議記錄資料庫。可用標籤管理不同 Notion database。</p>
+                  <a
+                    class="link-button"
+                    href="https://www.notion.so/my-integrations"
+                    target="_blank"
+                    rel="noreferrer"
+                    >前往 Notion Integrations</a
+                  >
+                </div>
+                <button
+                  class="secondary collapse-toggle"
+                  type="button"
+                  data-collapse-toggle="notionApiSettingsContent"
+                  aria-controls="notionApiSettingsContent"
+                  aria-expanded="false"
+                >
+                  展開
+                </button>
+              </div>
+
+              <div class="collapsible-content nested-subsection" id="notionApiSettingsContent" hidden>
+                <div class="form-grid notion-target-grid">
+                  <label class="field">
+                    <span>儲存目標</span>
+                    <select id="notionTargetSelect" name="notionTargetId">
+                      <option value="">尚未建立目標</option>
+                    </select>
+                    <small class="field-hint" id="notionTargetHint">選擇一個標籤，或新增一個 Notion database 目標。</small>
+                  </label>
+
+                  <label class="field">
+                    <span>目標標籤</span>
+                    <input
+                      id="notionTargetLabel"
+                      name="notionTargetLabel"
+                      type="text"
+                      placeholder="例：總公司 TodoSync"
+                    />
+                  </label>
+                </div>
+
+                <div class="form-grid">
+                  <label class="field">
+                    <span>Notion Token</span>
+                    <input
+                      id="notionToken"
+                      name="notionToken"
+                      type="password"
+                      autocomplete="off"
+                      placeholder="請填入 Notion integration token"
+                    />
+                  </label>
+
+                  <label class="field">
+                    <span>新增或更新 Notion Database ID / URL</span>
+                    <input
+                      id="notionDatabaseIdOrUrl"
+                      name="notionDatabaseIdOrUrl"
+                      type="text"
+                      placeholder="新增目標時貼上 database id 或完整 URL；選既有目標可留空"
+                    />
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div class="actions">
+              <button class="primary" type="submit" id="saveSettingsButton">儲存設定</button>
+              <button class="secondary" type="button" id="testGeminiButton">測試 Gemini</button>
+              <button class="secondary" type="button" id="testNotionButton">測試 Notion</button>
+              <span id="settingsMessage" class="progress-text"></span>
+            </div>
+          </div>
+        </form>
+      </section>
+
+      <section class="result-wrap" id="resultWrap" hidden>
+        <div class="result-toolbar">
+          <div>
+            <p class="eyebrow">輸出結果</p>
+            <h2 id="resultTitle">會議紀錄結果</h2>
+          </div>
+          <div class="toolbar-actions">
+            <button type="button" class="secondary" id="toggleMarkdownEditButton">編輯</button>
+            <button type="button" class="secondary" id="copyMarkdownButton">複製 Markdown</button>
+            <button type="button" class="secondary" id="writeNotionButton">寫入 Notion</button>
+          </div>
+        </div>
+
+        <div class="result-grid">
+          <article class="panel structured">
+            <h3>輸出預覽</h3>
+            <div id="structuredResult"></div>
+          </article>
+
+          <article class="panel markdown-panel">
+            <h3>Markdown 內容</h3>
+            <textarea
+              id="markdownResult"
+              class="markdown-editor"
+              rows="24"
+              placeholder="這裡可修改 AI 產出的 Markdown 再上傳"
+            ></textarea>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>
