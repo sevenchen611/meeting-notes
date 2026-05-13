@@ -1,6 +1,5 @@
-node_modules/
+﻿node_modules/
 .env
-notion-database-targets.json
 uploads/
 outputs/
 *.log
