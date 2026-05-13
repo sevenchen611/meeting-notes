@@ -168,8 +168,8 @@
           <div class="step-row collapsible-head">
             <div class="step-number">2</div>
             <div>
-              <h3>API 設定</h3>
-              <p class="meta">設定 Gemini API Key 與 Notion Integration，平常可先收起。</p>
+              <h3>2. Generate API Key</h3>
+              <p class="meta">設定 Gemini API Key，可隨時收起/展開。</p>
             </div>
             <button
               class="secondary collapse-toggle"
@@ -183,119 +183,123 @@
           </div>
 
           <div class="collapsible-content" id="apiSettingsContent" hidden>
-            <div class="settings-subpanel">
-              <div class="step-row nested-step">
-                <div class="step-number">2</div>
-                <div>
-                  <h3>Gemini API Key</h3>
-                  <p class="meta">請先在 Google AI Studio 取得 API key。</p>
-                  <a
-                    class="link-button"
-                    href="https://aistudio.google.com/app/apikey"
-                    target="_blank"
-                    rel="noreferrer"
-                    >開啟 Google AI Studio</a
-                  >
-                </div>
-                <button
-                  class="secondary collapse-toggle"
-                  type="button"
-                  data-collapse-toggle="geminiApiSettingsContent"
-                  aria-controls="geminiApiSettingsContent"
-                  aria-expanded="false"
-                >
-                  展開
-                </button>
-              </div>
+            <h3>Gemini API Key</h3>
+            <p class="meta">請先在 Google AI Studio 取得 API key。</p>
+            <a
+              class="link-button"
+              href="https://aistudio.google.com/app/apikey"
+              target="_blank"
+              rel="noreferrer"
+              >開啟 Google AI Studio</a
+            >
+            <label class="field">
+              <span>Gemini API Key</span>
+              <input
+                id="geminiApiKey"
+                name="geminiApiKey"
+                type="password"
+                autocomplete="off"
+                placeholder="請填入 Google AI Studio API key"
+              />
+            </label>
 
-              <div class="collapsible-content nested-subsection" id="geminiApiSettingsContent" hidden>
-                <label class="field">
-                  <span>Gemini API Key</span>
-                  <input
-                    id="geminiApiKey"
-                    name="geminiApiKey"
-                    type="password"
-                    autocomplete="off"
-                    placeholder="請填入 Google AI Studio API key"
-                  />
-                </label>
+            <label class="field">
+              <span>Gemini Model</span>
+              <input id="geminiModel" name="geminiModel" type="text" value="gemini-2.5-flash" />
+            </label>
+          </div>
+        </form>
 
-                <label class="field">
-                  <span>Gemini Model</span>
-                  <input id="geminiModel" name="geminiModel" type="text" value="gemini-2.5-flash" />
-                </label>
-              </div>
+        <form class="panel settings-panel is-collapsed" id="notionSettingsForm">
+          <div class="step-row collapsible-head">
+            <div class="step-number">3</div>
+            <div>
+              <h3>3. Notion Integration</h3>
+              <p class="meta">設定可切換的 Notion Database，避免混用。</p>
+            </div>
+            <button
+              class="secondary collapse-toggle"
+              type="button"
+              data-collapse-toggle="notionSettingsContent"
+              aria-controls="notionSettingsContent"
+              aria-expanded="false"
+            >
+              展開
+            </button>
+          </div>
+
+          <div class="collapsible-content" id="notionSettingsContent" hidden>
+            <div class="form-grid notion-target-grid">
+              <label class="field">
+                <span>儲存目標</span>
+                <select id="notionTargetSelect" name="notionTargetId">
+                  <option value="">尚未建立目標</option>
+                </select>
+                <small class="field-hint" id="notionTargetHint">選擇一個標籤，或新增一個 Notion database 目標。</small>
+              </label>
+
+              <label class="field">
+                <span>目標標籤</span>
+                <input id="notionTargetLabel" name="notionTargetLabel" type="text" placeholder="例：總公司 TodoSync" />
+              </label>
             </div>
 
-            <div class="settings-subpanel">
-              <div class="step-row nested-step">
-                <div class="step-number">3</div>
-                <div>
-                  <h3>Notion Integration</h3>
-                  <p class="meta">選擇要寫入的會議記錄資料庫。可用標籤管理不同 Notion database。</p>
-                  <a
-                    class="link-button"
-                    href="https://www.notion.so/my-integrations"
-                    target="_blank"
-                    rel="noreferrer"
-                    >前往 Notion Integrations</a
-                  >
-                </div>
-                <button
-                  class="secondary collapse-toggle"
-                  type="button"
-                  data-collapse-toggle="notionApiSettingsContent"
-                  aria-controls="notionApiSettingsContent"
-                  aria-expanded="false"
+            <div class="form-grid">
+              <label class="field">
+                <span>Notion Token</span>
+                <input
+                  id="notionToken"
+                  name="notionToken"
+                  type="password"
+                  autocomplete="off"
+                  placeholder="請填入 Notion integration token"
+                />
+              </label>
+
+              <label class="field">
+                <span>新增或更新 Notion Database ID / URL</span>
+                <input
+                  id="notionDatabaseIdOrUrl"
+                  name="notionDatabaseIdOrUrl"
+                  type="text"
+                  placeholder="新增目標時貼上 database id 或完整 URL；選既有目標可留空"
+                />
+              </label>
+            </div>
+
+            <div class="form-grid">
+              <label class="field">
+                <span>Notion 會議主持人 Person ID</span>
+                <input
+                  id="notionHostPersonId"
+                  name="notionHostPersonId"
+                  type="text"
+                  placeholder="可填寫 Notion 人員 ID"
+                  autocomplete="off"
+                />
+                <small class="field-hint"
+                  >將會寫入 Notion 的「會議主持人 / Host」欄位（若資料庫有對應 People 欄位時）。</small
                 >
-                  展開
-                </button>
+              </label>
+
+              <div class="field" style="justify-content: flex-end;">
+                <a
+                  class="link-button"
+                  href="https://www.notion.so/my-integrations"
+                  target="_blank"
+                  rel="noreferrer"
+                  >開啟 Notion Integrations</a
+                >
               </div>
-
-              <div class="collapsible-content nested-subsection" id="notionApiSettingsContent" hidden>
-                <div class="form-grid notion-target-grid">
-                  <label class="field">
-                    <span>儲存目標</span>
-                    <select id="notionTargetSelect" name="notionTargetId">
-                      <option value="">尚未建立目標</option>
-                    </select>
-                    <small class="field-hint" id="notionTargetHint">選擇一個標籤，或新增一個 Notion database 目標。</small>
-                  </label>
-
-                  <label class="field">
-                    <span>目標標籤</span>
-                    <input
-                      id="notionTargetLabel"
-                      name="notionTargetLabel"
-                      type="text"
-                      placeholder="例：總公司 TodoSync"
-                    />
-                  </label>
-                </div>
-
-                <div class="form-grid">
-                  <label class="field">
-                    <span>Notion Token</span>
-                    <input
-                      id="notionToken"
-                      name="notionToken"
-                      type="password"
-                      autocomplete="off"
-                      placeholder="請填入 Notion integration token"
-                    />
-                  </label>
-
-                  <label class="field">
-                    <span>新增或更新 Notion Database ID / URL</span>
-                    <input
-                      id="notionDatabaseIdOrUrl"
-                      name="notionDatabaseIdOrUrl"
-                      type="text"
-                      placeholder="新增目標時貼上 database id 或完整 URL；選既有目標可留空"
-                    />
-                  </label>
-                </div>
-              </div>
+            </div>
+            <div class="field">
+              <a
+                class="link-button"
+                href="https://developers.notion.com/reference/getting-started"
+                target="_blank"
+                rel="noreferrer"
+                >查看 Notion API 文件</a
+              >
             </div>
 
             <div class="actions">

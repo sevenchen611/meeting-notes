@@ -5,7 +5,17 @@ import { GoogleGenAI } from "@google/genai";
 import { createNotionClient, resolveMeetingTarget } from "./notion.js";
 
 const NOTION_TARGETS_FILE = "notion-database-targets.json";
-const DEFAULT_NOTION_TARGET_LABEL = "總公司 TodoSync";
+const DEFAULT_NOTION_TARGET_LABEL = "未命名會議資料庫";
+const DEFAULT_NOTION_TARGETS = [
+  {
+    id: "35951c68-6dac-80bf-b5b5-c34e379a865a",
+    label: "好主意好會議"
+  },
+  {
+    id: "35d51c68-6dac-80a4-9fd8-ed5372c520fe",
+    label: "讀書會議"
+  }
+];
 
 export async function getPublicConfig(rootDir = process.cwd()) {
   const targetStore = await readNotionTargetStore(rootDir);
@@ -15,6 +25,7 @@ export async function getPublicConfig(rootDir = process.cwd()) {
   return {
     geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
     notionConfigured: Boolean(process.env.NOTION_TOKEN && selectedTargetId),
+    notionHostPersonId: process.env.NOTION_HOST_PERSON_ID || "",
     model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
     notionDatabaseId: selectedTargetId ? maskValue(selectedTargetId) : "",
     notionTargetLabel: selectedTarget?.label || "",
@@ -37,6 +48,7 @@ export async function saveSettings(rootDir, settings = {}) {
     GEMINI_API_KEY: clean(settings.geminiApiKey) || process.env.GEMINI_API_KEY || "",
     GEMINI_MODEL: clean(settings.geminiModel) || process.env.GEMINI_MODEL || "gemini-2.5-flash",
     NOTION_TOKEN: clean(settings.notionToken) || process.env.NOTION_TOKEN || "",
+    NOTION_HOST_PERSON_ID: clean(settings.notionHostPersonId) || process.env.NOTION_HOST_PERSON_ID || "",
     NOTION_MEETING_DATABASE_ID: selectedTargetId || ""
   };
 
@@ -44,6 +56,7 @@ export async function saveSettings(rootDir, settings = {}) {
   process.env.GEMINI_API_KEY = next.GEMINI_API_KEY;
   process.env.GEMINI_MODEL = next.GEMINI_MODEL;
   process.env.NOTION_TOKEN = next.NOTION_TOKEN;
+  process.env.NOTION_HOST_PERSON_ID = next.NOTION_HOST_PERSON_ID;
   process.env.NOTION_MEETING_DATABASE_ID = next.NOTION_MEETING_DATABASE_ID;
 
   await writeNotionTargetStore(rootDir, updatedTargetStore);
@@ -53,30 +66,30 @@ export async function saveSettings(rootDir, settings = {}) {
 
 export async function testGeminiSettings() {
   if (!process.env.GEMINI_API_KEY) {
-    throw new Error("Gemini API Key 尚未設定。");
+    throw new Error("Gemini API Key 尚未設定");
   }
 
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   const response = await ai.models.generateContent({
     model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
-    contents: "請只回覆 OK"
+    contents: "OK"
   });
 
   const text = response.text?.trim() || "";
   return {
     ok: Boolean(text),
-    message: text || "Gemini 已連線。"
+    message: text || "Gemini 測試成功"
   };
 }
 
 export async function testNotionSettings() {
   if (!process.env.NOTION_TOKEN || !process.env.NOTION_MEETING_DATABASE_ID) {
-    throw new Error("Notion Token 或資料庫 ID 尚未設定。");
+    throw new Error("Notion Token 或 Notion Database ID 尚未設定");
   }
 
   const notion = createNotionClient();
   const target = await resolveMeetingTarget(notion, process.env.NOTION_MEETING_DATABASE_ID);
-  const title = getPlainTitle(target.dataSource.title || target.database?.title) || "會議記錄資料庫";
+  const title = getPlainTitle(target.dataSource.title || target.database?.title) || "未命名會議資料庫";
 
   return {
     ok: true,
@@ -107,6 +120,7 @@ function buildEnvFile(values) {
     "",
     "# Optional. Leave blank until you are ready to write records into Notion.",
     `NOTION_TOKEN=${values.NOTION_TOKEN}`,
+    `NOTION_HOST_PERSON_ID=${values.NOTION_HOST_PERSON_ID}`,
     `NOTION_MEETING_DATABASE_ID=${values.NOTION_MEETING_DATABASE_ID}`,
     ""
   ].join("\n");
@@ -137,7 +151,7 @@ async function writeNotionTargetStore(rootDir, store) {
 
 function normalizeNotionTargetStore(store = {}) {
   const currentEnvTarget = extractNotionDatabaseId(process.env.NOTION_MEETING_DATABASE_ID || "");
-  const rawTargets = Array.isArray(store?.targets) ? store.targets : [];
+  const rawTargets = Array.isArray(store?.targets) ? store.targets : DEFAULT_NOTION_TARGETS;
   const targets = [];
   const seen = new Set();
 
@@ -147,7 +161,7 @@ function normalizeNotionTargetStore(store = {}) {
     seen.add(id);
     targets.push({
       id,
-      label: clean(target?.label) || `會議記錄 ${targets.length + 1}`
+      label: clean(target?.label) || `未命名會議記錄 ${targets.length + 1}`
     });
   }
 
@@ -171,7 +185,7 @@ function normalizeNotionTargetStore(store = {}) {
 }
 
 function upsertNotionTargetFromSettings(store, settings = {}) {
-  const targets = [...store.targets];
+  const targets = [...(store?.targets || DEFAULT_NOTION_TARGETS)];
   const selectedFromForm = extractNotionDatabaseId(clean(settings.notionTargetId || ""));
   const newTargetId = extractNotionDatabaseId(clean(settings.notionDatabaseIdOrUrl || ""));
   const label = clean(settings.notionTargetLabel || "");
@@ -185,7 +199,7 @@ function upsertNotionTargetFromSettings(store, settings = {}) {
     } else {
       targets.push({
         id: newTargetId,
-        label: label || `會議記錄 ${targets.length + 1}`
+        label: label || `未命名會議記錄 ${targets.length + 1}`
       });
     }
   } else if (selectedFromForm && label) {
@@ -225,3 +239,4 @@ function maskValue(value) {
   if (text.length <= 8) return "已設定";
   return `${text.slice(0, 4)}...${text.slice(-4)}`;
 }
+

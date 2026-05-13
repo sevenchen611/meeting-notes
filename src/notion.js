@@ -28,6 +28,8 @@ export async function createMeetingPage({ analysis, markdown, sourceFileName, so
   const title = formatMeetingPageTitle(analysis, markdown, sourceFileName);
   const audio = attachAudio ? await uploadAudioForNotion(notion, sourceFile) : null;
   const blocks = buildMeetingPageBlocks({ audio, analysis, markdown });
+  const meetingProperties = buildMeetingProperties(target.dataSource, analysis, markdown);
+  const hostPersonProperties = buildHostPersonProperties(target.dataSource);
 
   const page = await notion.pages.create({
     parent: target.parent,
@@ -41,7 +43,8 @@ export async function createMeetingPage({ analysis, markdown, sourceFileName, so
           }
         ]
       },
-      ...buildMeetingProperties(target.dataSource, analysis, markdown)
+      ...meetingProperties,
+      ...hostPersonProperties
     },
     children: blocks.slice(0, 100)
   });
@@ -344,6 +347,27 @@ function buildMeetingProperties(dataSource, analysis = {}, markdown = "") {
   return properties;
 }
 
+function buildHostPersonProperties(dataSource) {
+  const properties = {};
+  const hostPersonPropertyName = getPropertyName(
+    dataSource,
+    ["主持人", "會議主持人", "主持人 ID", "Host", "Host Person", "主持人 / Host"],
+    "people",
+    { allowFallback: false }
+  );
+
+  const hostPersonId = normalizeNotionPersonId(process.env.NOTION_HOST_PERSON_ID);
+  if (!hostPersonPropertyName || !hostPersonId) {
+    return properties;
+  }
+
+  properties[hostPersonPropertyName] = {
+    people: [{ object: "user", id: hostPersonId }]
+  };
+
+  return properties;
+}
+
 function countActionItems(analysis = {}) {
   const groups = analysis.standard_minutes?.action_groups;
   if (Array.isArray(groups) && groups.length) {
@@ -367,6 +391,23 @@ function getPropertyName(dataSource, preferredNames, type, options = {}) {
 function hasSelectOption(dataSource, propertyName, optionName) {
   const options = dataSource.properties?.[propertyName]?.select?.options || [];
   return options.some((option) => option.name === optionName);
+}
+
+function normalizeNotionPersonId(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  const compact = raw.split(/[\s,;\n]+/)[0]?.trim();
+  if (!compact) return "";
+
+  const uuidMatch = compact.match(
+    /[0-9a-fA-F]{32}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/
+  );
+  if (!uuidMatch) return compact;
+
+  const compactId = uuidMatch[0].replace(/-/g, "");
+  if (compactId.length !== 32) return uuidMatch[0];
+  return `${compactId.slice(0, 8)}-${compactId.slice(8, 12)}-${compactId.slice(12, 16)}-${compactId.slice(16, 20)}-${compactId.slice(20)}`;
 }
 
 function normalizeDate(value) {

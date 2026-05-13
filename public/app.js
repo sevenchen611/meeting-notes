@@ -47,6 +47,7 @@ const notionTargetSelect = document.querySelector("#notionTargetSelect");
 const notionTargetLabel = document.querySelector("#notionTargetLabel");
 const notionTargetHint = document.querySelector("#notionTargetHint");
 const notionDatabaseIdOrUrl = document.querySelector("#notionDatabaseIdOrUrl");
+const notionHostPersonId = document.querySelector("#notionHostPersonId");
 const promptVersionId = document.querySelector("#promptVersionId");
 const promptVersionSelect = document.querySelector("#promptVersionSelect");
 const promptVersionName = document.querySelector("#promptVersionName");
@@ -69,7 +70,50 @@ if (toggleMarkdownEditButton) {
 let selectedParticipants = [];
 const API_BASE = window.location.protocol === "file:" ? "http://localhost:5178" : "";
 const PARTICIPANT_HISTORY_KEY = "meeting-notes-participant-history";
-const DEFAULT_PARTICIPANT_HISTORY = ["Seven（聖文，男）", "Maggie（昱晴，女）"];
+const DEFAULT_PARTICIPANT_HISTORY = [
+  "與會者",
+  "與會者是 Seven 跟昱晴 Maggie。",
+  "Attendee",
+  "Host",
+  "主講人",
+  "主持人",
+  "主持人/與會者",
+  "發言人1",
+  "發言人2",
+  "發言者1",
+  "發言者2",
+  "主持人/主講人",
+  "主講人/與會者",
+  "Attendee / GongWu Team",
+  "GongWu Team",
+  "Helper",
+  "Seven（聖文，男）",
+  "Maggie（昱晴，女）",
+  "周澤文",
+  "哲雯",
+  "鍾哥",
+  "David",
+  "Davy",
+  "HoYu",
+  "Yi-Ching",
+  "Maggie（昱晴）",
+  "Maggie",
+  "Seven",
+  "Seven（聖文）",
+  "Seven（聖文,男）",
+  "Seven & 哲雯",
+  "Seven、Maggie",
+  "Maggie（Maggie）",
+  "Maggie.",
+  "Speaker 1",
+  "Speaker 2",
+  "Speaker A",
+  "Speaker B",
+  "Speaker A and Speaker B",
+  "Presenter",
+  "User",
+  "主持人 ID"
+];
 
 setDefaultMeetingDate();
 loadParticipantHistory();
@@ -725,10 +769,15 @@ function renderStatus(config) {
   geminiModel.value = config.model || "gemini-2.5-flash";
   renderNotionTargetControls(config);
   const targetLabel = config.notionTargetLabel ? `：${config.notionTargetLabel}` : "";
+  const notionHostLabel = config.notionHostPersonId ? "已設定" : "未設定";
+  if (notionHostPersonId) {
+    notionHostPersonId.value = config.notionHostPersonId || "";
+  }
 
   statusRow.append(
     pill(config.geminiConfigured ? "Gemini：已設定" : "Gemini：未設定", config.geminiConfigured ? "ok" : "warn"),
     pill(config.notionConfigured ? `Notion${targetLabel}` : "Notion：未設定", config.notionConfigured ? "ok" : "warn"),
+    pill(`主持人 ID：${notionHostLabel}`, notionHostLabel === "已設定" ? "ok" : "warn"),
     pill(`模型：${config.model || "gemini-2.5-flash"}`, "pending")
   );
 }
